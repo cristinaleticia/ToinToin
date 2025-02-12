@@ -3,213 +3,177 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Classificador de Cabelo</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <title>Detector de Curvatura</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.15.0/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.9/dist/tf-tflite.min.js"></script>
     <style>
         body {
-            margin: 0;
             font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
         }
-        .app-container {
+        #videoContainer, #canvasContainer {
+            margin: 20px auto;
             max-width: 100%;
-            min-height: 100vh;
-            background-color: white;
         }
-        .header {
-            padding: 1rem;
-            display: flex;
-            align-items: center;
+        #video, #canvas {
+            max-width: 100%;
+            border: 2px solid #ccc;
+            border-radius: 8px;
         }
-        .back-button {
-            background: none;
-            border: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-        }
-        .content {
-            padding: 1rem;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .result-circle {
-            width: 200px;
-            height: 200px;
-            background: #FFE44D;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 2rem 0;
-        }
-        .button {
-            width: 100%;
-            max-width: 300px;
-            padding: 1rem;
-            border: none;
-            border-radius: 50px;
-            font-size: 1.2rem;
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            background-color: #007bff;
             color: white;
+            border: none;
+            border-radius: 4px;
             cursor: pointer;
-            margin: 0.5rem 0;
         }
-        .button-primary {
-            background-color: #FF7B9C;
+        button:hover {
+            background-color: #0056b3;
         }
-        .button-secondary {
-            background-color: #47B5FF;
+        #result {
+            margin: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
         }
-        .camera-container {
-            width: 100%;
-            max-width: 300px;
-            aspect-ratio: 1;
-            background: #f0f0f0;
-            border-radius: 10px;
-            overflow: hidden;
-            margin: 1rem 0;
-        }
-        #video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        #canvas {
-            display: none;
+        #modelInput {
+            margin: 20px 0;
         }
     </style>
 </head>
 <body>
-    <div class="app-container" id="app">
-        <div class="header">
-            <button class="back-button" onclick="goBack()">←</button>
-        </div>
-        <div class="content" id="content">
-            <!-- Conteúdo será preenchido via JavaScript -->
-        </div>
+    <h1>Detector de Curvatura</h1>
+    
+    <div>
+        <input type="file" id="modelInput" accept=".tflite">
+        <button onclick="loadModel()">Carregar Modelo</button>
+    </div>
+
+    <div id="videoContainer">
+        <video id="video" autoplay playsinline></video>
+    </div>
+    
+    <div id="canvasContainer">
+        <canvas id="canvas" style="display: none;"></canvas>
+    </div>
+
+    <div>
+        <button id="captureBtn" onclick="capture()">Capturar Foto</button>
+        <button id="analyzeBtn" onclick="analyze()" disabled>Analisar Curvatura</button>
+    </div>
+
+    <div id="result">
+        Carregue o modelo e capture uma foto para análise
     </div>
 
     <script>
-        let model;
-        let currentStep = 1;
-        const classes = ['Crespo', 'Cacheado', 'Ondulado', 'Liso']; // Suas classes
-
-        // Carregar o modelo
-        async function loadModel() {
+        let tfliteModel;
+        let video = document.getElementById('video');
+        let canvas = document.getElementById('canvas');
+        let ctx = canvas.getContext('2d');
+        
+        // Inicializa a câmera
+        async function initCamera() {
             try {
-                // Substitua pelo caminho onde seu modelo está hospedado
-                model = await tf.loadGraphModel('web_model/model.json');
-                console.log('Modelo carregado');
-            } catch (error) {
-                console.error('Erro ao carregar modelo:', error);
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 224 },
+                        height: { ideal: 224 }
+                    } 
+                });
+                video.srcObject = stream;
+                
+                // Define o tamanho do canvas igual ao vídeo
+                video.addEventListener('loadedmetadata', () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                });
+            } catch (err) {
+                console.error('Erro ao acessar a câmera:', err);
+                alert('Erro ao acessar a câmera. Verifique as permissões.');
             }
         }
 
-        // Inicializar câmera
-        async function setupCamera() {
-            const video = document.getElementById('video');
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'environment' },
-                audio: false
-            });
-            video.srcObject = stream;
-            return new Promise(resolve => {
-                video.onloadedmetadata = () => resolve(video);
-            });
+        // Carrega o modelo TFLite
+        async function loadModel() {
+            const fileInput = document.getElementById('modelInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Selecione um arquivo .tflite');
+                return;
+            }
+
+            try {
+                const buffer = await file.arrayBuffer();
+                tfliteModel = await tflite.loadTFLiteModel(buffer);
+                document.getElementById('result').innerText = 'Modelo carregado! Você pode capturar uma foto agora.';
+                document.getElementById('analyzeBtn').disabled = false;
+            } catch (error) {
+                console.error(error);
+                document.getElementById('result').innerText = 'Erro ao carregar modelo: ' + error.message;
+            }
         }
 
-        // Processar imagem
-        async function processImage(video) {
-            const canvas = document.getElementById('canvas');
-            canvas.width = 224;
-            canvas.height = 224;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, 224, 224);
-            
-            // Converter para tensor
-            const imageData = ctx.getImageData(0, 0, 224, 224);
-            const tensor = tf.browser.fromPixels(imageData)
-                .expandDims()
-                .toFloat()
-                .div(255.0);
+        // Captura foto da câmera
+        function capture() {
+            canvas.style.display = 'block';
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            document.getElementById('result').innerText = 'Foto capturada! Clique em Analisar.';
+        }
+
+        // Prepara a imagem para o modelo
+        function preprocessImage(imageData) {
+            // Converte a imagem para um tensor
+            let tensor = tf.browser.fromPixels(imageData)
+                // Redimensiona para 224x224 (ou o tamanho que seu modelo espera)
+                .resizeBilinear([224, 224])
+                // Normaliza os valores para [0,1]
+                .div(255.0)
+                // Expande as dimensões para incluir o batch size
+                .expandDims(0);
             
             return tensor;
         }
 
-        // Fazer previsão
-        async function predict() {
-            const video = document.getElementById('video');
-            const tensor = await processImage(video);
-            const predictions = await model.predict(tensor).data();
-            const maxIndex = predictions.indexOf(Math.max(...predictions));
-            return classes[maxIndex];
-        }
+        // Analisa a imagem com o modelo
+        async function analyze() {
+            if (!tfliteModel) {
+                alert('Por favor, carregue o modelo primeiro');
+                return;
+            }
 
-        // Mostrar tela inicial
-        function showInitialScreen() {
-            const content = document.getElementById('content');
-            content.innerHTML = `
-                <h1 style="font-size: 2rem; text-align: center;">Seu cabelo é</h1>
-                <div class="result-circle">
-                    <svg width="50" height="100">
-                        <path d="M25,0 Q50,50 25,100" stroke="black" fill="none" stroke-width="3"/>
-                    </svg>
-                </div>
-                <h2 style="font-size: 2rem; text-align: center;">Descubra seu tipo</h2>
-                <p style="text-align: center">Vamos analisar seu cabelo!</p>
-                <button class="button button-primary" onclick="showCamera()">Continuar</button>
-                <button class="button button-secondary" onclick="showInitialScreen()">Reenviar</button>
-            `;
-        }
-
-        // Mostrar tela da câmera
-        function showCamera() {
-            const content = document.getElementById('content');
-            content.innerHTML = `
-                <h1 style="font-size: 1.5rem; color: #47B5FF">Sua Curvatura</h1>
-                <p>Tire uma foto da parte de trás do seu cabelo</p>
-                <div class="camera-container">
-                    <video id="video" autoplay playsinline></video>
-                    <canvas id="canvas"></canvas>
-                </div>
-                <button class="button button-primary" onclick="captureAndPredict()">Tirar Foto</button>
-            `;
-            setupCamera();
-        }
-
-        // Capturar e prever
-        async function captureAndPredict() {
             try {
-                const result = await predict();
-                showResult(result);
+                // Pré-processa a imagem do canvas
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const tensor = preprocessImage(imageData);
+
+                // Executa a inferência
+                const predictions = await tfliteModel.predict(tensor);
+                const result = await predictions.data();
+
+                // Interpreta o resultado
+                // Ajuste esta parte de acordo com as classes do seu modelo
+                document.getElementById('result').innerText = 'Resultado da análise: ' + 
+                    'Probabilidade de curvatura: ' + (result[0] * 100).toFixed(2) + '%';
+
+                // Limpa os tensores
+                tensor.dispose();
+                predictions.dispose();
             } catch (error) {
-                console.error('Erro na previsão:', error);
+                console.error(error);
+                document.getElementById('result').innerText = 'Erro na análise: ' + error.message;
             }
         }
 
-        // Mostrar resultado
-        function showResult(type) {
-            const content = document.getElementById('content');
-            content.innerHTML = `
-                <h1 style="font-size: 2rem; text-align: center;">Seu cabelo é</h1>
-                <div class="result-circle">
-                    <svg width="50" height="100">
-                        <path d="M25,0 Q50,50 25,100" stroke="black" fill="none" stroke-width="3"/>
-                    </svg>
-                </div>
-                <h2 style="font-size: 2rem; text-align: center;">${type}</h2>
-                <p style="text-align: center">Cada fiozinho do seu cabelo é único!</p>
-                <button class="button button-primary" onclick="showCamera()">Tentar Novamente</button>
-                <button class="button button-secondary" onclick="showInitialScreen()">Voltar</button>
-            `;
-        }
-
-        function goBack() {
-            showInitialScreen();
-        }
-
-        // Inicializar
-        loadModel();
-        showInitialScreen();
+        // Inicia a câmera quando a página carrega
+        initCamera();
     </script>
 </body>
 </html>
