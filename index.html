@@ -41,19 +41,11 @@
             border: 1px solid #ccc;
             border-radius: 4px;
         }
-        #modelInput {
-            margin: 20px 0;
-        }
     </style>
 </head>
 <body>
     <h1>Detector de Curvatura</h1>
     
-    <div>
-        <input type="file" id="modelInput" accept=".tflite">
-        <button onclick="loadModel()">Carregar Modelo</button>
-    </div>
-
     <div id="videoContainer">
         <video id="video" autoplay playsinline></video>
     </div>
@@ -64,11 +56,11 @@
 
     <div>
         <button id="captureBtn" onclick="capture()">Capturar Foto</button>
-        <button id="analyzeBtn" onclick="analyze()" disabled>Analisar Curvatura</button>
+        <button id="analyzeBtn" onclick="analyze()">Analisar Curvatura</button>
     </div>
 
     <div id="result">
-        Carregue o modelo e capture uma foto para análise
+        Aguardando captura de foto...
     </div>
 
     <script>
@@ -77,6 +69,20 @@
         let canvas = document.getElementById('canvas');
         let ctx = canvas.getContext('2d');
         
+        // Carrega o modelo automaticamente ao iniciar
+        async function loadModel() {
+            try {
+                // Supondo que seu modelo está na mesma pasta com nome 'model.tflite'
+                const modelResponse = await fetch('modelo_cabelo.tflite');
+                const modelBuffer = await modelResponse.arrayBuffer();
+                tfliteModel = await tflite.loadTFLiteModel(modelBuffer);
+                console.log('Modelo carregado com sucesso!');
+            } catch (error) {
+                console.error('Erro ao carregar modelo:', error);
+                document.getElementById('result').innerText = 'Erro ao carregar modelo: ' + error.message;
+            }
+        }
+
         // Inicializa a câmera
         async function initCamera() {
             try {
@@ -89,7 +95,6 @@
                 });
                 video.srcObject = stream;
                 
-                // Define o tamanho do canvas igual ao vídeo
                 video.addEventListener('loadedmetadata', () => {
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
@@ -97,27 +102,6 @@
             } catch (err) {
                 console.error('Erro ao acessar a câmera:', err);
                 alert('Erro ao acessar a câmera. Verifique as permissões.');
-            }
-        }
-
-        // Carrega o modelo TFLite
-        async function loadModel() {
-            const fileInput = document.getElementById('modelInput');
-            const file = fileInput.files[0];
-            
-            if (!file) {
-                alert('Selecione um arquivo .tflite');
-                return;
-            }
-
-            try {
-                const buffer = await file.arrayBuffer();
-                tfliteModel = await tflite.loadTFLiteModel(buffer);
-                document.getElementById('result').innerText = 'Modelo carregado! Você pode capturar uma foto agora.';
-                document.getElementById('analyzeBtn').disabled = false;
-            } catch (error) {
-                console.error(error);
-                document.getElementById('result').innerText = 'Erro ao carregar modelo: ' + error.message;
             }
         }
 
@@ -130,13 +114,9 @@
 
         // Prepara a imagem para o modelo
         function preprocessImage(imageData) {
-            // Converte a imagem para um tensor
             let tensor = tf.browser.fromPixels(imageData)
-                // Redimensiona para 224x224 (ou o tamanho que seu modelo espera)
                 .resizeBilinear([224, 224])
-                // Normaliza os valores para [0,1]
                 .div(255.0)
-                // Expande as dimensões para incluir o batch size
                 .expandDims(0);
             
             return tensor;
@@ -145,25 +125,21 @@
         // Analisa a imagem com o modelo
         async function analyze() {
             if (!tfliteModel) {
-                alert('Por favor, carregue o modelo primeiro');
+                alert('Modelo ainda não foi carregado. Aguarde um momento.');
                 return;
             }
 
             try {
-                // Pré-processa a imagem do canvas
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 const tensor = preprocessImage(imageData);
 
-                // Executa a inferência
                 const predictions = await tfliteModel.predict(tensor);
                 const result = await predictions.data();
 
-                // Interpreta o resultado
-                // Ajuste esta parte de acordo com as classes do seu modelo
+                // Ajuste esta interpretação de acordo com seu modelo
                 document.getElementById('result').innerText = 'Resultado da análise: ' + 
                     'Probabilidade de curvatura: ' + (result[0] * 100).toFixed(2) + '%';
 
-                // Limpa os tensores
                 tensor.dispose();
                 predictions.dispose();
             } catch (error) {
@@ -172,8 +148,9 @@
             }
         }
 
-        // Inicia a câmera quando a página carrega
+        // Inicia a câmera e carrega o modelo quando a página carrega
         initCamera();
+        loadModel();
     </script>
 </body>
 </html>
