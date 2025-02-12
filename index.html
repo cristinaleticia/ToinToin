@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sua Curvatura</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.15.0/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.9/dist/tf-tflite.min.js"></script>
     <style>
         body {
             margin: 0;
@@ -57,9 +55,14 @@
             border-radius: 10px;
             overflow: hidden;
             margin-bottom: 10px;
+            position: relative;
+            padding-top: 100%;
         }
 
         #video, #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
             object-fit: cover;
@@ -88,9 +91,15 @@
             background-color: #d76a84;
         }
 
-        /* Estilos para a tela de resultado */
-        .result-screen {
-            display: none; /* Inicialmente oculto */
+        #resultScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #4AC6D6;
+            z-index: 1000;
+            display: none;
         }
 
         .result-card {
@@ -119,26 +128,17 @@
             font-size: 16px;
             line-height: 1.4;
         }
-
-        /* Controle de visibilidade das telas */
-        .camera-screen {
-            display: block;
-        }
-
-        .hidden {
-            display: none !important;
-        }
     </style>
 </head>
 <body>
-    <div class="camera-screen" id="cameraScreen">
+    <div id="cameraScreen">
         <a href="#" class="back-button">←</a>
         
         <div class="container">
             <h1>Sua Curvatura</h1>
             
             <p class="instruction">
-                Peça para um adulto tirar uma foto ou escolher uma da galeria que mostre a parte de trás do seu cabelinho! 📸✨ deuu
+                Peça para um adulto tirar uma foto ou escolher uma da galeria que mostre a parte de trás do seu cabelinho! 📸✨
             </p>
 
             <div class="camera-container">
@@ -153,9 +153,8 @@
         </div>
     </div>
 
-    <!-- Nova tela de resultado -->
-    <div class="result-screen" id="resultScreen">
-        <a href="#" class="back-button" onclick="voltarParaCamera()">←</a>
+    <div id="resultScreen">
+        <a href="#" class="back-button" onclick="voltarParaCamera(event)">←</a>
         
         <div class="container">
             <h1>Resultado</h1>
@@ -166,7 +165,7 @@
                 <div id="probabilidade" class="descricao">Probabilidade: -%</div>
             </div>
 
-            <button class="capture-button" onclick="voltarParaCamera()">Nova Foto</button>
+            <button class="capture-button" onclick="voltarParaCamera(event)">Nova Foto</button>
         </div>
     </div>
 
@@ -197,73 +196,42 @@
         }
 
         function capture() {
+            console.log("Capturando foto...");
             canvas.style.display = 'block';
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            analyze(); // Chama a análise imediatamente após capturar
+            console.log("Foto capturada!");
+            
+            // Para teste, vamos mostrar diretamente o resultado
+            simularAnalise();
         }
 
-        function determinarTipoCurvatura(probabilidades) {
-            const tipos = ['Liso', 'Ondulado', 'Cacheado', 'Crespo'];
-            const maxIndex = probabilidades.indexOf(Math.max(...probabilidades));
-            return tipos[maxIndex];
-        }
+        function simularAnalise() {
+            console.log("Analisando...");
+            // Simulando um resultado fixo para teste
+            const tipoCurvatura = "Cacheado";
+            const probabilidade = 85.5;
 
-        async function analyze() {
-            if (!tfliteModel) {
-                alert('Modelo ainda não foi carregado. Aguarde um momento.');
-                return;
-            }
+            document.getElementById('tipoCurvatura').textContent = tipoCurvatura;
+            document.getElementById('probabilidade').textContent = 
+                `Probabilidade: ${probabilidade}%`;
 
-            try {
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const tensor = preprocessImage(imageData);
-
-                const predictions = await tfliteModel.predict(tensor);
-                const result = await predictions.data();
-
-                // Determina o tipo de curvatura
-                const tipoCurvatura = determinarTipoCurvatura(Array.from(result));
-                const maxProb = Math.max(...result) * 100;
-
-                // Atualiza a tela de resultado
-                document.getElementById('tipoCurvatura').textContent = tipoCurvatura;
-                document.getElementById('probabilidade').textContent = 
-                    `Probabilidade: ${maxProb.toFixed(2)}%`;
-
-                // Mostra a tela de resultado
-                mostrarResultado();
-
-                tensor.dispose();
-                predictions.dispose();
-            } catch (error) {
-                console.error(error);
-                alert('Erro na análise: ' + error.message);
-            }
+            console.log("Mostrando resultado...");
+            mostrarResultado();
         }
 
         function mostrarResultado() {
-            document.getElementById('cameraScreen').classList.add('hidden');
             document.getElementById('resultScreen').style.display = 'block';
+            console.log("Tela de resultado deve estar visível agora");
         }
 
-        function voltarParaCamera() {
+        function voltarParaCamera(event) {
+            event.preventDefault();
             document.getElementById('resultScreen').style.display = 'none';
-            document.getElementById('cameraScreen').classList.remove('hidden');
-        }
-
-        // Prepara a imagem para o modelo
-        function preprocessImage(imageData) {
-            let tensor = tf.browser.fromPixels(imageData)
-                .resizeBilinear([224, 224])
-                .div(255.0)
-                .expandDims(0);
-            
-            return tensor;
+            initCamera();
         }
 
         // Inicia a câmera quando a página carrega
         initCamera();
-        loadModel();
     </script>
 </body>
 </html>
