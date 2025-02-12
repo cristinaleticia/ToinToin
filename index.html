@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classificador de Cabelo</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        .app-container {
+            max-width: 100%;
+            min-height: 100vh;
+            background-color: white;
+        }
+        .header {
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+        }
+        .back-button {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        .content {
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .result-circle {
+            width: 200px;
+            height: 200px;
+            background: #FFE44D;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 2rem 0;
+        }
+        .button {
+            width: 100%;
+            max-width: 300px;
+            padding: 1rem;
+            border: none;
+            border-radius: 50px;
+            font-size: 1.2rem;
+            color: white;
+            cursor: pointer;
+            margin: 0.5rem 0;
+        }
+        .button-primary {
+            background-color: #FF7B9C;
+        }
+        .button-secondary {
+            background-color: #47B5FF;
+        }
+        .camera-container {
+            width: 100%;
+            max-width: 300px;
+            aspect-ratio: 1;
+            background: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 1rem 0;
+        }
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        #canvas {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container" id="app">
+        <div class="header">
+            <button class="back-button" onclick="goBack()">←</button>
+        </div>
+        <div class="content" id="content">
+            <!-- Conteúdo será preenchido via JavaScript -->
+        </div>
+    </div>
+
+    <script>
+        let model;
+        let currentStep = 1;
+        const classes = ['Crespo', 'Cacheado', 'Ondulado', 'Liso']; // Suas classes
+
+        // Carregar o modelo
+        async function loadModel() {
+            try {
+                // Substitua pelo caminho onde seu modelo está hospedado
+                model = await tf.loadGraphModel('web_model/model.json');
+                console.log('Modelo carregado');
+            } catch (error) {
+                console.error('Erro ao carregar modelo:', error);
+            }
+        }
+
+        // Inicializar câmera
+        async function setupCamera() {
+            const video = document.getElementById('video');
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment' },
+                audio: false
+            });
+            video.srcObject = stream;
+            return new Promise(resolve => {
+                video.onloadedmetadata = () => resolve(video);
+            });
+        }
+
+        // Processar imagem
+        async function processImage(video) {
+            const canvas = document.getElementById('canvas');
+            canvas.width = 224;
+            canvas.height = 224;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, 224, 224);
+            
+            // Converter para tensor
+            const imageData = ctx.getImageData(0, 0, 224, 224);
+            const tensor = tf.browser.fromPixels(imageData)
+                .expandDims()
+                .toFloat()
+                .div(255.0);
+            
+            return tensor;
+        }
+
+        // Fazer previsão
+        async function predict() {
+            const video = document.getElementById('video');
+            const tensor = await processImage(video);
+            const predictions = await model.predict(tensor).data();
+            const maxIndex = predictions.indexOf(Math.max(...predictions));
+            return classes[maxIndex];
+        }
+
+        // Mostrar tela inicial
+        function showInitialScreen() {
+            const content = document.getElementById('content');
+            content.innerHTML = `
+                <h1 style="font-size: 2rem; text-align: center;">Seu cabelo é</h1>
+                <div class="result-circle">
+                    <svg width="50" height="100">
+                        <path d="M25,0 Q50,50 25,100" stroke="black" fill="none" stroke-width="3"/>
+                    </svg>
+                </div>
+                <h2 style="font-size: 2rem; text-align: center;">Descubra seu tipo</h2>
+                <p style="text-align: center">Vamos analisar seu cabelo!</p>
+                <button class="button button-primary" onclick="showCamera()">Continuar</button>
+                <button class="button button-secondary" onclick="showInitialScreen()">Reenviar</button>
+            `;
+        }
+
+        // Mostrar tela da câmera
+        function showCamera() {
+            const content = document.getElementById('content');
+            content.innerHTML = `
+                <h1 style="font-size: 1.5rem; color: #47B5FF">Sua Curvatura</h1>
+                <p>Tire uma foto da parte de trás do seu cabelo</p>
+                <div class="camera-container">
+                    <video id="video" autoplay playsinline></video>
+                    <canvas id="canvas"></canvas>
+                </div>
+                <button class="button button-primary" onclick="captureAndPredict()">Tirar Foto</button>
+            `;
+            setupCamera();
+        }
+
+        // Capturar e prever
+        async function captureAndPredict() {
+            try {
+                const result = await predict();
+                showResult(result);
+            } catch (error) {
+                console.error('Erro na previsão:', error);
+            }
+        }
+
+        // Mostrar resultado
+        function showResult(type) {
+            const content = document.getElementById('content');
+            content.innerHTML = `
+                <h1 style="font-size: 2rem; text-align: center;">Seu cabelo é</h1>
+                <div class="result-circle">
+                    <svg width="50" height="100">
+                        <path d="M25,0 Q50,50 25,100" stroke="black" fill="none" stroke-width="3"/>
+                    </svg>
+                </div>
+                <h2 style="font-size: 2rem; text-align: center;">${type}</h2>
+                <p style="text-align: center">Cada fiozinho do seu cabelo é único!</p>
+                <button class="button button-primary" onclick="showCamera()">Tentar Novamente</button>
+                <button class="button button-secondary" onclick="showInitialScreen()">Voltar</button>
+            `;
+        }
+
+        function goBack() {
+            showInitialScreen();
+        }
+
+        // Inicializar
+        loadModel();
+        showInitialScreen();
+    </script>
+</body>
+</html>
