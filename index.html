@@ -87,27 +87,87 @@
         .capture-button:hover {
             background-color: #d76a84;
         }
+
+        /* Estilos para a tela de resultado */
+        .result-screen {
+            display: none; /* Inicialmente oculto */
+        }
+
+        .result-card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            margin: 40px auto;
+            max-width: 300px;
+        }
+
+        .curvatura-titulo {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .probabilidade {
+            color: #E87B96;
+            font-size: 36px;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+
+        .descricao {
+            color: #666;
+            font-size: 16px;
+            line-height: 1.4;
+        }
+
+        /* Controle de visibilidade das telas */
+        .camera-screen {
+            display: block;
+        }
+
+        .hidden {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
-    <a href="#" class="back-button">←</a>
-    
-    <div class="container">
-        <h1>Sua Curvatura</h1>
+    <div class="camera-screen" id="cameraScreen">
+        <a href="#" class="back-button">←</a>
         
-        <p class="instruction">
-            Peça para um adulto tirar uma foto ou escolher uma da galeria que mostre a parte de trás do seu cabelinho! 📸✨ atualizou
-        </p>
+        <div class="container">
+            <h1>Sua Curvatura</h1>
+            
+            <p class="instruction">
+                Peça para um adulto tirar uma foto ou escolher uma da galeria que mostre a parte de trás do seu cabelinho! 📸✨ deuu
+            </p>
 
-        <div class="camera-container">
-            <div class="camera-box">
-                <video id="video" autoplay playsinline></video>
-                <canvas id="canvas" style="display: none;"></canvas>
+            <div class="camera-container">
+                <div class="camera-box">
+                    <video id="video" autoplay playsinline></video>
+                    <canvas id="canvas" style="display: none;"></canvas>
+                </div>
+                <div class="camera-label">Câmera</div>
             </div>
-            <div class="camera-label">Câmera</div>
-        </div>
 
-        <button class="capture-button" onclick="capture()">Tirar Foto</button>
+            <button class="capture-button" onclick="capture()">Tirar Foto</button>
+        </div>
+    </div>
+
+    <!-- Nova tela de resultado -->
+    <div class="result-screen" id="resultScreen">
+        <a href="#" class="back-button" onclick="voltarParaCamera()">←</a>
+        
+        <div class="container">
+            <h1>Resultado</h1>
+            
+            <div class="result-card">
+                <div class="curvatura-titulo">Tipo de Curvatura</div>
+                <div id="tipoCurvatura" class="probabilidade">-</div>
+                <div id="probabilidade" class="descricao">Probabilidade: -%</div>
+            </div>
+
+            <button class="capture-button" onclick="voltarParaCamera()">Nova Foto</button>
+        </div>
     </div>
 
     <script>
@@ -136,23 +196,11 @@
             }
         }
 
-         // Captura foto da câmera
-         function capture() {
+        function capture() {
             canvas.style.display = 'block';
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            document.getElementById('result').innerText = 'Foto capturada! Clique em Analisar.';
+            analyze(); // Chama a análise imediatamente após capturar
         }
-
-        // Prepara a imagem para o modelo
-        function preprocessImage(imageData) {
-            let tensor = tf.browser.fromPixels(imageData)
-                .resizeBilinear([224, 224])
-                .div(255.0)
-                .expandDims(0);
-            
-            return tensor;
-        }
-
 
         function determinarTipoCurvatura(probabilidades) {
             const tipos = ['Liso', 'Ondulado', 'Cacheado', 'Crespo'];
@@ -160,7 +208,6 @@
             return tipos[maxIndex];
         }
 
-        // Modifique a função analyze() para:
         async function analyze() {
             if (!tfliteModel) {
                 alert('Modelo ainda não foi carregado. Aguarde um momento.');
@@ -178,14 +225,13 @@
                 const tipoCurvatura = determinarTipoCurvatura(Array.from(result));
                 const maxProb = Math.max(...result) * 100;
 
-                // Salva o resultado no localStorage
-                localStorage.setItem('resultadoAnalise', JSON.stringify({
-                    tipo: tipoCurvatura,
-                    probabilidade: maxProb
-                }));
+                // Atualiza a tela de resultado
+                document.getElementById('tipoCurvatura').textContent = tipoCurvatura;
+                document.getElementById('probabilidade').textContent = 
+                    `Probabilidade: ${maxProb.toFixed(2)}%`;
 
-                // Redireciona para a página de resultado
-                window.location.href = 'resultado.html';
+                // Mostra a tela de resultado
+                mostrarResultado();
 
                 tensor.dispose();
                 predictions.dispose();
@@ -195,9 +241,27 @@
             }
         }
 
+        function mostrarResultado() {
+            document.getElementById('cameraScreen').classList.add('hidden');
+            document.getElementById('resultScreen').style.display = 'block';
+        }
 
+        function voltarParaCamera() {
+            document.getElementById('resultScreen').style.display = 'none';
+            document.getElementById('cameraScreen').classList.remove('hidden');
+        }
 
-        // Inicia a câmera e carrega o modelo quando a página carrega
+        // Prepara a imagem para o modelo
+        function preprocessImage(imageData) {
+            let tensor = tf.browser.fromPixels(imageData)
+                .resizeBilinear([224, 224])
+                .div(255.0)
+                .expandDims(0);
+            
+            return tensor;
+        }
+
+        // Inicia a câmera quando a página carrega
         initCamera();
         loadModel();
     </script>
