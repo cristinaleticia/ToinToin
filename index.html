@@ -196,7 +196,11 @@
                 const classes = ['Liso', 'Ondulado', 'Cacheado', 'Crespo'];
                 const maxIndex = result.indexOf(Math.max(...result));
                 document.getElementById('tipoCurvatura').textContent = classes[maxIndex];
-                document.getElementById('probabilidade').textContent = `Probabilidade: ${(result[maxIndex] * 100).toFixed(2)}%`;
+                let probabilidadeText = 'Probabilidades:\n';
+                classes.forEach((classe, index) => {
+                    probabilidadeText += `${classe}: ${(result[index] * 100).toFixed(2)}%\n`;
+                });
+                document.getElementById('probabilidade').textContent = probabilidadeText;
                 mostrarResultado();
                 tensor.dispose();
                 predictions.dispose();
