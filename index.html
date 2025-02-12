@@ -153,7 +153,14 @@
             return tensor;
         }
 
-        // Analisa a imagem com o modelo
+
+        function determinarTipoCurvatura(probabilidades) {
+            const tipos = ['Liso', 'Ondulado', 'Cacheado', 'Crespo'];
+            const maxIndex = probabilidades.indexOf(Math.max(...probabilidades));
+            return tipos[maxIndex];
+        }
+
+        // Modifique a função analyze() para:
         async function analyze() {
             if (!tfliteModel) {
                 alert('Modelo ainda não foi carregado. Aguarde um momento.');
@@ -167,17 +174,28 @@
                 const predictions = await tfliteModel.predict(tensor);
                 const result = await predictions.data();
 
-                // Ajuste esta interpretação de acordo com seu modelo
-                document.getElementById('result').innerText = 'Resultado da análise: ' + 
-                    'Probabilidade de curvatura: ' + (result[0] * 100).toFixed(2) + '%';
+                // Determina o tipo de curvatura
+                const tipoCurvatura = determinarTipoCurvatura(Array.from(result));
+                const maxProb = Math.max(...result) * 100;
+
+                // Salva o resultado no localStorage
+                localStorage.setItem('resultadoAnalise', JSON.stringify({
+                    tipo: tipoCurvatura,
+                    probabilidade: maxProb
+                }));
+
+                // Redireciona para a página de resultado
+                window.location.href = 'resultado.html';
 
                 tensor.dispose();
                 predictions.dispose();
             } catch (error) {
                 console.error(error);
-                document.getElementById('result').innerText = 'Erro na análise: ' + error.message;
+                alert('Erro na análise: ' + error.message);
             }
         }
+
+
 
         // Inicia a câmera e carrega o modelo quando a página carrega
         initCamera();
