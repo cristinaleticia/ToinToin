@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sua Curvatura</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.9/dist/tf-tflite.min.js"></script>
     <style>
         body {
             margin: 0;
@@ -133,14 +135,11 @@
 <body>
     <div id="cameraScreen">
         <a href="#" class="back-button">←</a>
-        
         <div class="container">
             <h1>Sua Curvatura</h1>
-            
             <p class="instruction">
-                Peça para um adulto tirar uma foto ou escolher uma da galeria que mostre a parte de trás do seu cabelinho! 📸✨
+                Peça para um adulto tirar uma foto ou escolher uma da galeria que mostre a parte de trás do seu cabelo! 📸✨ aaaaaa
             </p>
-
             <div class="camera-container">
                 <div class="camera-box">
                     <video id="video" autoplay playsinline></video>
@@ -148,90 +147,73 @@
                 </div>
                 <div class="camera-label">Câmera</div>
             </div>
-
             <button class="capture-button" onclick="capture()">Tirar Foto</button>
         </div>
     </div>
-
     <div id="resultScreen">
         <a href="#" class="back-button" onclick="voltarParaCamera(event)">←</a>
-        
         <div class="container">
             <h1>Resultado</h1>
-            
             <div class="result-card">
                 <div class="curvatura-titulo">Tipo de Curvatura</div>
                 <div id="tipoCurvatura" class="probabilidade">-</div>
                 <div id="probabilidade" class="descricao">Probabilidade: -%</div>
             </div>
-
             <button class="capture-button" onclick="voltarParaCamera(event)">Nova Foto</button>
         </div>
     </div>
-
     <script>
         let video = document.getElementById('video');
         let canvas = document.getElementById('canvas');
         let ctx = canvas.getContext('2d');
-        
-        async function initCamera() {
+        let tfliteModel = null;
+        async function loadModel() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: 'environment',
-                        width: { ideal: 224 },
-                        height: { ideal: 224 }
-                    } 
-                });
-                video.srcObject = stream;
-                
-                video.addEventListener('loadedmetadata', () => {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                });
-            } catch (err) {
-                console.error('Erro ao acessar a câmera:', err);
-                alert('Erro ao acessar a câmera. Verifique as permissões.');
+                tfliteModel = await tflite.loadTFLiteModel('modelo_cabelo.tflite');
+                console.log('Modelo carregado com sucesso!');
+            } catch (error) {
+                console.error('Erro ao carregar o modelo:', error);
             }
         }
-
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 224 }, height: { ideal: 224 } } });
+                video.srcObject = stream;
+            } catch (err) {
+                console.error('Erro ao acessar a câmera:', err);
+            }
+        }
         function capture() {
-            console.log("Capturando foto...");
-            canvas.style.display = 'block';
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            console.log("Foto capturada!");
-            
-            // Para teste, vamos mostrar diretamente o resultado
-            simularAnalise();
+            analyze();
         }
-
-        function simularAnalise() {
-            console.log("Analisando...");
-            // Simulando um resultado fixo para teste
-            const tipoCurvatura = "Cacheado";
-            const probabilidade = 85.5;
-
-            document.getElementById('tipoCurvatura').textContent = tipoCurvatura;
-            document.getElementById('probabilidade').textContent = 
-                `Probabilidade: ${probabilidade}%`;
-
-            console.log("Mostrando resultado...");
-            mostrarResultado();
+        async function analyze() {
+            try {
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const tensor = tf.browser.fromPixels(imageData).resizeBilinear([224, 224]).div(255.0).expandDims(0);
+                const predictions = await tfliteModel.predict(tensor);
+                const result = await predictions.data();
+                const classes = ['Liso', 'Ondulado', 'Cacheado', 'Crespo'];
+                const maxIndex = result.indexOf(Math.max(...result));
+                document.getElementById('tipoCurvatura').textContent = classes[maxIndex];
+                document.getElementById('probabilidade').textContent = `Probabilidade: ${(result[maxIndex] * 100).toFixed(2)}%`;
+                mostrarResultado();
+                tensor.dispose();
+                predictions.dispose();
+            } catch (error) {
+                console.error('Erro na análise:', error);
+            }
         }
-
         function mostrarResultado() {
             document.getElementById('resultScreen').style.display = 'block';
-            console.log("Tela de resultado deve estar visível agora");
         }
-
         function voltarParaCamera(event) {
             event.preventDefault();
             document.getElementById('resultScreen').style.display = 'none';
             initCamera();
         }
-
-        // Inicia a câmera quando a página carrega
         initCamera();
+        loadModel();
     </script>
 </body>
 </html>
