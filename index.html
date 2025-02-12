@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,35 +13,17 @@
             font-family: Arial, sans-serif;
             background-color: #4AC6D6;
             min-height: 100vh;
-        }
-
-        .back-button {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            color: white;
-            font-size: 24px;
-            text-decoration: none;
+            text-align: center;
         }
 
         .container {
             padding: 20px;
-            text-align: center;
         }
 
         h1 {
             color: white;
             font-size: 36px;
-            margin-top: 60px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-        }
-
-        .instruction {
-            color: white;
-            font-size: 18px;
-            margin: 20px auto;
-            max-width: 300px;
-            line-height: 1.4;
+            margin-top: 40px;
         }
 
         .camera-container {
@@ -49,14 +31,13 @@
             border-radius: 20px;
             padding: 20px;
             margin: 20px auto;
-            max-width: 300px;
+            max-width: 320px;
         }
 
         .camera-box {
             background: #f0f0f0;
             border-radius: 10px;
             overflow: hidden;
-            margin-bottom: 10px;
             position: relative;
             padding-top: 100%;
         }
@@ -68,12 +49,6 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-        }
-
-        .camera-label {
-            color: #333;
-            font-size: 18px;
-            margin: 10px 0;
         }
 
         .capture-button {
@@ -109,7 +84,7 @@
             border-radius: 20px;
             padding: 30px;
             margin: 40px auto;
-            max-width: 300px;
+            max-width: 320px;
         }
 
         .curvatura-titulo {
@@ -124,98 +99,146 @@
             font-weight: bold;
             margin: 20px 0;
         }
-
-        .descricao {
-            color: #666;
-            font-size: 16px;
-            line-height: 1.4;
-        }
     </style>
 </head>
 <body>
     <div id="cameraScreen">
-        <a href="#" class="back-button">←</a>
         <div class="container">
             <h1>Sua Curvatura</h1>
-            <p class="instruction">
-                Peça para um adulto tirar uma foto ou escolher uma da galeria que mostre a parte de trás do seu cabelo! 📸✨ aaaaaa
-            </p>
+
             <div class="camera-container">
                 <div class="camera-box">
                     <video id="video" autoplay playsinline></video>
                     <canvas id="canvas" style="display: none;"></canvas>
                 </div>
-                <div class="camera-label">Câmera</div>
             </div>
+
             <button class="capture-button" onclick="capture()">Tirar Foto</button>
         </div>
     </div>
+
     <div id="resultScreen">
-        <a href="#" class="back-button" onclick="voltarParaCamera(event)">←</a>
         <div class="container">
             <h1>Resultado</h1>
+
             <div class="result-card">
                 <div class="curvatura-titulo">Tipo de Curvatura</div>
                 <div id="tipoCurvatura" class="probabilidade">-</div>
                 <div id="probabilidade" class="descricao">Probabilidade: -%</div>
             </div>
+
             <button class="capture-button" onclick="voltarParaCamera(event)">Nova Foto</button>
         </div>
     </div>
+
     <script>
         let video = document.getElementById('video');
         let canvas = document.getElementById('canvas');
         let ctx = canvas.getContext('2d');
         let tfliteModel = null;
+
+        // Carrega o modelo TFLite
         async function loadModel() {
             try {
                 tfliteModel = await tflite.loadTFLiteModel('modelo_cabelo.tflite');
                 console.log('Modelo carregado com sucesso!');
             } catch (error) {
                 console.error('Erro ao carregar o modelo:', error);
+                alert('Erro ao carregar o modelo.');
             }
         }
+
         async function initCamera() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 224 }, height: { ideal: 224 } } });
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment', width: { ideal: 224 }, height: { ideal: 224 } }
+                });
                 video.srcObject = stream;
+                
+                video.addEventListener('loadedmetadata', () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                });
             } catch (err) {
                 console.error('Erro ao acessar a câmera:', err);
+                alert('Erro ao acessar a câmera. Verifique as permissões.');
             }
         }
+
         function capture() {
+            console.log("Capturando foto...");
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             analyze();
         }
+
         async function analyze() {
             try {
+                if (!tfliteModel) {
+                    console.error("Erro: Modelo não carregado!");
+                    alert("Erro: O modelo ainda não foi carregado.");
+                    return;
+                }
+
+                // Prepara a imagem (igual ao Python)
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const tensor = tf.browser.fromPixels(imageData).resizeBilinear([224, 224]).div(255.0).expandDims(0);
+                const tensor = preprocessImage(imageData);
+
+                // Faz a predição
                 const predictions = await tfliteModel.predict(tensor);
-                const result = await predictions.data();
+                const result = await predictions.data(); // Obtém os valores da predição
+
+                console.log("Predições:", result);
+
+                // Define as classes (mesma ordem do treinamento)
                 const classes = ['Liso', 'Ondulado', 'Cacheado', 'Crespo'];
+
+                // Encontra o índice da maior probabilidade
                 const maxIndex = result.indexOf(Math.max(...result));
-                document.getElementById('tipoCurvatura').textContent = classes[maxIndex];
-                let probabilidadeText = 'Probabilidades:\n';
-                classes.forEach((classe, index) => {
-                    probabilidadeText += `${classe}: ${(result[index] * 100).toFixed(2)}%\n`;
-                });
-                document.getElementById('probabilidade').textContent = probabilidadeText;
+                const tipoCurvatura = classes[maxIndex];
+                const probabilidade = result[maxIndex] * 100;
+
+                // Atualiza a interface
+                document.getElementById('tipoCurvatura').textContent = tipoCurvatura;
+                document.getElementById('probabilidade').textContent = 
+                    `Probabilidade: ${probabilidade.toFixed(2)}%`;
+
+                console.log(`Tipo: ${tipoCurvatura} | Confiança: ${probabilidade.toFixed(2)}%`);
+                
+                // Exibe a tela de resultados
                 mostrarResultado();
+
+                // Libera memória
                 tensor.dispose();
                 predictions.dispose();
             } catch (error) {
                 console.error('Erro na análise:', error);
+                alert('Erro ao analisar a imagem. Tente novamente.');
             }
         }
+
+        function preprocessImage(imageData) {
+            return tf.tidy(() => {
+                const tensor = tf.browser.fromPixels(imageData)
+                    .resizeBilinear([224, 224])
+                    .toFloat()
+                    .div(tf.scalar(255.0))
+                    .expandDims(0);
+
+                return tensor;
+            });
+        }
+
         function mostrarResultado() {
             document.getElementById('resultScreen').style.display = 'block';
         }
+
         function voltarParaCamera(event) {
             event.preventDefault();
             document.getElementById('resultScreen').style.display = 'none';
             initCamera();
         }
+
+        // Inicia a câmera e carrega o modelo quando a página carrega
         initCamera();
         loadModel();
     </script>
