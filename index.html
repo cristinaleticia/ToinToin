@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sua Curvatura</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.9/dist/tf-tflite.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #4AC6D6;
+            min-height: 100vh;
+        }
+
+        .back-button {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 24px;
+            text-decoration: none;
+        }
+
+        .container {
+            padding: 20px;
+            text-align: center;
+        }
+
+        h1 {
+            color: white;
+            font-size: 36px;
+            margin-top: 60px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .instruction {
+            color: white;
+            font-size: 18px;
+            margin: 20px auto;
+            max-width: 300px;
+            line-height: 1.4;
+        }
+
+        .camera-container {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            margin: 20px auto;
+            max-width: 300px;
+        }
+
+        .camera-box {
+            background: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 10px;
+            position: relative;
+            padding-top: 100%;
+        }
+
+        #video, #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .camera-label {
+            color: #333;
+            font-size: 18px;
+            margin: 10px 0;
+        }
+
+        .capture-button {
+            background-color: #E87B96;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            padding: 15px 40px;
+            font-size: 18px;
+            margin-top: 20px;
+            cursor: pointer;
+            width: 80%;
+            max-width: 300px;
+        }
+
+        .capture-button:hover {
+            background-color: #d76a84;
+        }
+
+        #resultScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #4AC6D6;
+            z-index: 1000;
+            display: none;
+        }
+
+        .result-card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            margin: 40px auto;
+            max-width: 300px;
+        }
+
+        .curvatura-titulo {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .probabilidade {
+            color: #E87B96;
+            font-size: 36px;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+
+        .descricao {
+            color: #666;
+            font-size: 16px;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+    <div id="cameraScreen">
+        <a href="#" class="back-button">←</a>
+        <div class="container">
+            <h1>Sua Curvatura</h1>
+            <p class="instruction">
+                Peça para um adulto tirar uma foto ou escolher uma da galeria que mostre a parte de trás do seu cabelo! 📸✨ aaaaaa
+            </p>
+            <div class="camera-container">
+                <div class="camera-box">
+                    <video id="video" autoplay playsinline></video>
+                    <canvas id="canvas" style="display: none;"></canvas>
+                </div>
+                <div class="camera-label">Câmera</div>
+            </div>
+            <button class="capture-button" onclick="capture()">Tirar Foto</button>
+        </div>
+    </div>
+    <div id="resultScreen">
+        <a href="#" class="back-button" onclick="voltarParaCamera(event)">←</a>
+        <div class="container">
+            <h1>Resultado</h1>
+            <div class="result-card">
+                <div class="curvatura-titulo">Tipo de Curvatura</div>
+                <div id="tipoCurvatura" class="probabilidade">-</div>
+                <div id="probabilidade" class="descricao">Probabilidade: -%</div>
+            </div>
+            <button class="capture-button" onclick="voltarParaCamera(event)">Nova Foto</button>
+        </div>
+    </div>
+    <script>
+        let video = document.getElementById('video');
+        let canvas = document.getElementById('canvas');
+        let ctx = canvas.getContext('2d');
+        let tfliteModel = null;
+        async function loadModel() {
+            try {
+                tfliteModel = await tflite.loadTFLiteModel('modelo_cabelo.tflite');
+                console.log('Modelo carregado com sucesso!');
+            } catch (error) {
+                console.error('Erro ao carregar o modelo:', error);
+            }
+        }
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 224 }, height: { ideal: 224 } } });
+                video.srcObject = stream;
+            } catch (err) {
+                console.error('Erro ao acessar a câmera:', err);
+            }
+        }
+        function capture() {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            analyze();
+        }
+        async function analyze() {
+            try {
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const tensor = tf.browser.fromPixels(imageData).resizeBilinear([224, 224]).div(255.0).expandDims(0);
+                const predictions = await tfliteModel.predict(tensor);
+                const result = await predictions.data();
+                const classes = ['Liso', 'Ondulado', 'Cacheado', 'Crespo'];
+                const maxIndex = result.indexOf(Math.max(...result));
+                document.getElementById('tipoCurvatura').textContent = classes[maxIndex];
+                document.getElementById('probabilidade').textContent = `Probabilidade: ${(result[maxIndex] * 100).toFixed(2)}%`;
+                mostrarResultado();
+                tensor.dispose();
+                predictions.dispose();
+            } catch (error) {
+                console.error('Erro na análise:', error);
+            }
+        }
+        function mostrarResultado() {
+            document.getElementById('resultScreen').style.display = 'block';
+        }
+        function voltarParaCamera(event) {
+            event.preventDefault();
+            document.getElementById('resultScreen').style.display = 'none';
+            initCamera();
+        }
+        initCamera();
+        loadModel();
+    </script>
+</body>
+</html>
