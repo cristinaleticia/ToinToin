@@ -1,328 +1,78 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin">
-    <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp">
-    <title>Sua Curvatura</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.9/dist/tf-tflite.min.js"></script>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: Arial, sans-serif;
-            background-color: #4AC6D6;
-            min-height: 100vh;
-        }
-
-        .back-button {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            color: white;
-            font-size: 24px;
-            text-decoration: none;
-        }
-
-        .container {
-            padding: 20px;
-            text-align: center;
-        }
-
-        h1 {
-            color: white;
-            font-size: 36px;
-            margin-top: 60px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-        }
-
-        .instruction {
-            color: white;
-            font-size: 18px;
-            margin: 20px auto;
-            max-width: 300px;
-            line-height: 1.4;
-        }
-
-        .camera-container {
-            background: white;
-            border-radius: 20px;
-            padding: 20px;
-            margin: 20px auto;
-            max-width: 300px;
-        }
-
-        .camera-box {
-            background: #f0f0f0;
-            border-radius: 10px;
-            overflow: hidden;
-            margin-bottom: 10px;
-            position: relative;
-            padding-top: 100%;
-        }
-
-        #video, #canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .camera-label {
-            color: #333;
-            font-size: 18px;
-            margin: 10px 0;
-        }
-
-        .capture-button {
-            background-color: #E87B96;
-            color: white;
-            border: none;
-            border-radius: 25px;
-            padding: 15px 40px;
-            font-size: 18px;
-            margin-top: 20px;
-            cursor: pointer;
-            width: 80%;
-            max-width: 300px;
-        }
-
-        .capture-button:hover {
-            background-color: #d76a84;
-        }
-
-        .file-input-container {
-            margin: 20px auto;
-            max-width: 300px;
-        }
-
-        #fileInput {
-            display: none;
-        }
-
-        .file-input-label {
-            background-color: #E87B96;
-            color: white;
-            border: none;
-            border-radius: 25px;
-            padding: 15px 40px;
-            font-size: 18px;
-            cursor: pointer;
-            display: block;
-            margin: 10px auto;
-            text-align: center;
-        }
-
-        .file-input-label:hover {
-            background-color: #d76a84;
-        }
-
-        #resultScreen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #4AC6D6;
-            z-index: 1000;
-            display: none;
-        }
-
-        .result-card {
-            background: white;
-            border-radius: 20px;
-            padding: 30px;
-            margin: 40px auto;
-            max-width: 300px;
-        }
-
-        .curvatura-titulo {
-            color: #333;
-            font-size: 24px;
-            margin-bottom: 10px;
-        }
-
-        .probabilidade {
-            color: #E87B96;
-            font-size: 36px;
-            font-weight: bold;
-            margin: 20px 0;
-        }
-
-        .descricao {
-            color: #666;
-            font-size: 16px;
-            line-height: 1.4;
-        }
-
-        #loadingIndicator {
-            display: none;
-            color: white;
-            font-size: 18px;
-            margin: 20px 0;
-        }
-    </style>
+    <title>Classificação de Cabelos</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.12.0/tf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow-models/mobilenet/1.0.0/index.min.js"></script>
 </head>
 <body>
-    <div id="cameraScreen">
-        <a href="#" class="back-button">←</a>
-        <div class="container">
-            <h1>Sua Curvatura</h1>
-            <p class="instruction">
-                Peça para um adulto tirar uma foto ou escolher uma da galeria que mostre a parte de trás do seu cabelo! 📸✨
-            </p>
-            <div id="loadingIndicator">Carregando modelo...</div>
-            <div class="camera-container">
-                <div class="camera-box">
-                    <video id="video" autoplay playsinline></video>
-                    <canvas id="canvas" style="display: none;"></canvas>
-                </div>
-                <div class="camera-label">Câmera</div>
-            </div>
-            <button class="capture-button" onclick="capture()">Tirar Foto</button>
-            <div class="file-input-container">
-                <input type="file" id="fileInput" accept="image/*" onchange="handleFileSelect(event)">
-                <label for="fileInput" class="file-input-label">Escolher da Galeria</label>
-            </div>
+    <div style="max-width: 800px; margin: 0 auto; padding: 20px;">
+        <h1>Classificação de Cabelos</h1>
+        <input type="file" id="imageUpload" accept="image/*">
+        <div style="margin: 20px 0;">
+            <img id="preview" style="max-width: 100%; display: none;">
         </div>
+        <div id="result" style="margin-top: 20px; font-size: 18px;"></div>
     </div>
-    <div id="resultScreen">
-        <a href="#" class="back-button" onclick="voltarParaCamera(event)">←</a>
-        <div class="container">
-            <h1>Resultado</h1>
-            <div class="result-card">
-                <div class="curvatura-titulo">Tipo de Curvatura</div>
-                <div id="tipoCurvatura" class="probabilidade">-</div>
-                <div id="probabilidade" class="descricao">Probabilidade: -%</div>
-            </div>
-            <button class="capture-button" onclick="voltarParaCamera(event)">Nova Foto</button>
-        </div>
-    </div>
+
     <script>
-        let video = document.getElementById('video');
-        let canvas = document.getElementById('canvas');
-        let ctx = canvas.getContext('2d');
-        let tfliteModel = null;
-        let modelLoaded = false;
+        let model;
+        let classes;
 
-        // Definir tamanho do canvas para corresponder ao modelo
-        canvas.width = 224;
-        canvas.height = 224;
-
-        async function loadModel() {
+        async function carregarModelo() {
             try {
-                document.getElementById('loadingIndicator').style.display = 'block';
-                console.log('Iniciando carregamento do modelo...');
-                tfliteModel = await tflite.loadTFLiteModel('modelo_cabelo.tflite');
-                console.log('Modelo carregado com sucesso!');
-                modelLoaded = true;
-                document.getElementById('loadingIndicator').style.display = 'none';
+                model = await tf.loadLayersModel('web_model/model.json');
+                const response = await fetch('classes.json');
+                classes = await response.json();
+                console.log('Modelo e classes carregados com sucesso');
             } catch (error) {
                 console.error('Erro ao carregar o modelo:', error);
-                alert('Erro ao carregar o modelo. Por favor, recarregue a página.');
-                document.getElementById('loadingIndicator').style.display = 'none';
             }
         }
 
-        async function initCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: 'environment',
-                        width: { ideal: 224 },
-                        height: { ideal: 224 }
-                    }
-                });
-                video.srcObject = stream;
-            } catch (err) {
-                console.error('Erro ao acessar a câmera:', err);
-                alert('Não foi possível acessar a câmera. Por favor, verifique as permissões.');
-            }
+        async function classificarImagem(image) {
+            // Pré-processar a imagem
+            const tensor = tf.browser.fromPixels(image)
+                .resizeNearestNeighbor([224, 224])
+                .toFloat()
+                .div(255.0)
+                .expandDims();
+
+            // Obter previsões
+            const predictions = await model.predict(tensor).data();
+            const results = Array.from(predictions)
+                .map((prob, i) => ({
+                    class: classes[i],
+                    probability: prob * 100
+                }))
+                .sort((a, b) => b.probability - a.probability);
+
+            return results;
         }
 
-        async function handleFileSelect(event) {
-            if (!modelLoaded) {
-                alert('Aguarde o modelo carregar completamente.');
-                return;
-            }
+        // Carregar modelo quando a página carregar
+        carregarModelo();
 
-            const file = event.target.files[0];
-            if (file) {
-                const img = new Image();
-                img.onload = function() {
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    analyze();
-                };
-                img.src = URL.createObjectURL(file);
-            }
-        }
+        // Lidar com upload de imagem
+        document.getElementById('imageUpload').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
 
-        function capture() {
-            if (!modelLoaded) {
-                alert('Aguarde o modelo carregar completamente.');
-                return;
-            }
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            analyze();
-        }
+            // Mostrar preview
+            const preview = document.getElementById('preview');
+            preview.src = URL.createObjectURL(file);
+            preview.style.display = 'block';
 
-        async function analyze() {
-            try {
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const tensor = tf.tidy(() => {
-                    return tf.browser.fromPixels(imageData)
-                        .resizeBilinear([224, 224])
-                        .expandDims(0)
-                        .div(255.0);
-                });
-
-                console.log('Iniciando predição...');
-                const predictions = await tfliteModel.predict(tensor);
-                const result = await predictions.data();
+            // Esperar imagem carregar
+            preview.onload = async () => {
+                const results = await classificarImagem(preview);
                 
-                tensor.dispose();
-                predictions.dispose();
-
-                console.log('Resultados:', result);
-
-                const classes = ['Liso', 'Ondulado', 'Cacheado', 'Crespo'];
-                const maxIndex = result.indexOf(Math.max(...result));
-                
-                document.getElementById('tipoCurvatura').textContent = classes[maxIndex];
-                document.getElementById('probabilidade').textContent = 
-                    `Probabilidade: ${(result[maxIndex] * 100).toFixed(2)}%`;
-                
-                mostrarResultado();
-            } catch (error) {
-                console.error('Erro na análise:', error);
-                alert('Erro ao processar imagem. Por favor, tente novamente.');
-            }
-        }
-
-        function mostrarResultado() {
-            document.getElementById('resultScreen').style.display = 'block';
-        }
-
-        function voltarParaCamera(event) {
-            event.preventDefault();
-            document.getElementById('resultScreen').style.display = 'none';
-            document.getElementById('fileInput').value = '';
-            initCamera();
-        }
-
-        // Inicializar câmera e modelo ao carregar a página
-        initCamera();
-        loadModel();
-
-        // Limpar recursos ao fechar a página
-        window.addEventListener('beforeunload', () => {
-            if (video.srcObject) {
-                video.srcObject.getTracks().forEach(track => track.stop());
-            }
+                // Mostrar resultados
+                const resultDiv = document.getElementById('result');
+                resultDiv.innerHTML = results.map(r => 
+                    `<div>${r.class}: ${r.probability.toFixed(2)}%</div>`
+                ).join('');
+            };
         });
     </script>
 </body>
