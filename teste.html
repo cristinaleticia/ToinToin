@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Teste de Carregamento</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js"></script>
+</head>
+<body>
+    <div id="status" style="margin: 20px; font-family: Arial;"></div>
+
+    <script>
+        const statusDiv = document.getElementById('status');
+        
+        function addStatus(message) {
+            statusDiv.innerHTML += `<p>${message}</p>`;
+            console.log(message);
+        }
+
+        async function testModelLoading() {
+            try {
+                addStatus("Iniciando teste de carregamento...");
+                
+                // Testa se o TensorFlow.js está carregado
+                if (tf) {
+                    addStatus("✅ TensorFlow.js carregado com sucesso");
+                }
+
+                // Tenta acessar o arquivo model.json
+                addStatus("Tentando acessar model.json...");
+                const modelUrl = 'https://cristinaleticia.github.io/ToinToin/modelo_web/model.json';
+                
+                try {
+                    const response = await fetch(modelUrl);
+                    if (response.ok) {
+                        addStatus("✅ model.json encontrado");
+                        const jsonContent = await response.json();
+                        addStatus(`ℹ️ Formato do modelo: ${jsonContent.format}`);
+                        addStatus(`ℹ️ Número de weights: ${jsonContent.weightsManifest?.[0]?.weights?.length || 0}`);
+                    } else {
+                        addStatus(`❌ Erro ao acessar model.json: ${response.status} ${response.statusText}`);
+                    }
+                } catch (e) {
+                    addStatus(`❌ Erro ao fazer fetch do model.json: ${e.message}`);
+                }
+
+                // Tenta carregar o modelo
+                addStatus("Tentando carregar o modelo...");
+                try {
+                    const model = await tf.loadGraphModel(modelUrl);
+                    addStatus("✅ Modelo carregado com sucesso!");
+                    
+                    // Testa o modelo
+                    const testTensor = tf.zeros([1, 224, 224, 3]);
+                    const prediction = model.predict(testTensor);
+                    addStatus("✅ Teste de predição realizado com sucesso!");
+                    prediction.dispose();
+                    testTensor.dispose();
+                } catch (e) {
+                    addStatus(`❌ Erro ao carregar o modelo: ${e.message}`);
+                }
+
+            } catch (error) {
+                addStatus(`❌ Erro geral: ${error.message}`);
+            }
+        }
+
+        // Inicia o teste
+        testModelLoading();
+    </script>
+</body>
+</html>
