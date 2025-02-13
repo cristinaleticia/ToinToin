@@ -7,7 +7,6 @@
     <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp">
     <title>Sua Curvatura</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.9/dist/tf-tflite.min.js"></script>
     <style>
         body {
             margin: 0;
@@ -173,7 +172,7 @@
         <div class="container">
             <h1>Sua Curvatura</h1>
             <p class="instruction">
-                Peça para um adulto tirar uma foto ou escolher uma da galeria que mostre a parte de trás do seu cabelo! 📸✨
+                Peça para um adulto tirar uma foto ou escolher uma da galeria que mostre a parte de trás do seu cabelo! 📸✨ aaaaaaaaaaaaaaaaaaaaaaaaaaa
             </p>
             <div id="loadingIndicator">Carregando modelo...</div>
             <div class="camera-container">
@@ -206,10 +205,9 @@
         let video = document.getElementById('video');
         let canvas = document.getElementById('canvas');
         let ctx = canvas.getContext('2d');
-        let tfliteModel = null;
+        let model = null;
         let modelLoaded = false;
 
-        // Definir tamanho do canvas para corresponder ao modelo
         canvas.width = 224;
         canvas.height = 224;
 
@@ -217,7 +215,7 @@
             try {
                 document.getElementById('loadingIndicator').style.display = 'block';
                 console.log('Iniciando carregamento do modelo...');
-                tfliteModel = await tflite.loadTFLiteModel('modelo_cabelo.tflite');
+                model = await tf.loadGraphModel('web_model/model.json');
                 console.log('Modelo carregado com sucesso!');
                 modelLoaded = true;
                 document.getElementById('loadingIndicator').style.display = 'none';
@@ -281,7 +279,7 @@
                 });
 
                 console.log('Iniciando predição...');
-                const predictions = await tfliteModel.predict(tensor);
+                const predictions = await model.predict(tensor);
                 const result = await predictions.data();
                 
                 tensor.dispose();
@@ -314,11 +312,11 @@
             initCamera();
         }
 
-        // Inicializar câmera e modelo ao carregar a página
+        // Initialize camera and model when page loads
         initCamera();
         loadModel();
 
-        // Limpar recursos ao fechar a página
+        // Clean up resources when closing the page
         window.addEventListener('beforeunload', () => {
             if (video.srcObject) {
                 video.srcObject.getTracks().forEach(track => track.stop());
