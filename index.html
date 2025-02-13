@@ -3,12 +3,36 @@
 <head>
     <title>Classificação de Cabelos</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.12.0/tf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow-models/mobilenet/1.0.0/index.min.js"></script>
+    <style>
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .result-item {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+        .loading {
+            display: none;
+            margin: 20px 0;
+            color: #666;
+        }
+        .error {
+            color: #ff0000;
+            margin: 10px 0;
+        }
+    </style>
 </head>
 <body>
-    <div style="max-width: 800px; margin: 0 auto; padding: 20px;">
+    <div class="container">
         <h1>Classificação de Cabelos</h1>
         <input type="file" id="imageUpload" accept="image/*">
+        <div id="loading" class="loading">Processando imagem...</div>
+        <div id="error" class="error"></div>
         <div style="margin: 20px 0;">
             <img id="preview" style="max-width: 100%; display: none;">
         </div>
@@ -18,61 +42,101 @@
     <script>
         let model;
         let classes;
-
+        
         async function carregarModelo() {
             try {
+                const loadingEl = document.getElementById('loading');
+                const errorEl = document.getElementById('error');
+                
+                loadingEl.style.display = 'block';
+                errorEl.textContent = '';
+                
                 model = await tf.loadLayersModel('web_model/model.json');
                 const response = await fetch('classes.json');
                 classes = await response.json();
+                
+                loadingEl.style.display = 'none';
                 console.log('Modelo e classes carregados com sucesso');
             } catch (error) {
+                const errorEl = document.getElementById('error');
+                errorEl.textContent = 'Erro ao carregar o modelo: ' + error.message;
                 console.error('Erro ao carregar o modelo:', error);
             }
         }
 
         async function classificarImagem(image) {
-            // Pré-processar a imagem
-            const tensor = tf.browser.fromPixels(image)
-                .resizeNearestNeighbor([224, 224])
-                .toFloat()
-                .div(255.0)
-                .expandDims();
+            try {
+                // Pré-processar a imagem
+                const tensor = tf.tidy(() => {
+                    return tf.browser.fromPixels(image)
+                        .resizeNearestNeighbor([224, 224])
+                        .toFloat()
+                        .div(255.0)
+                        .expandDims();
+                });
 
-            // Obter previsões
-            const predictions = await model.predict(tensor).data();
-            const results = Array.from(predictions)
-                .map((prob, i) => ({
-                    class: classes[i],
-                    probability: prob * 100
-                }))
-                .sort((a, b) => b.probability - a.probability);
+                // Obter previsões
+                const predictions = await model.predict(tensor).data();
+                tensor.dispose(); // Liberar memória
 
-            return results;
+                if (!classes) {
+                    throw new Error('Classes não foram carregadas');
+                }
+
+                return Array.from(predictions)
+                    .map((prob, i) => ({
+                        class: classes[i],
+                        probability: prob * 100
+                    }))
+                    .sort((a, b) => b.probability - a.probability);
+            } catch (error) {
+                throw new Error('Erro ao classificar imagem: ' + error.message);
+            }
         }
 
         // Carregar modelo quando a página carregar
-        carregarModelo();
+        window.addEventListener('load', carregarModelo);
 
         // Lidar com upload de imagem
         document.getElementById('imageUpload').addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
-            // Mostrar preview
+            const loadingEl = document.getElementById('loading');
+            const errorEl = document.getElementById('error');
+            const resultDiv = document.getElementById('result');
             const preview = document.getElementById('preview');
-            preview.src = URL.createObjectURL(file);
-            preview.style.display = 'block';
 
-            // Esperar imagem carregar
-            preview.onload = async () => {
-                const results = await classificarImagem(preview);
+            try {
+                // Resetar estado
+                loadingEl.style.display = 'block';
+                errorEl.textContent = '';
+                resultDiv.innerHTML = '';
                 
+                // Mostrar preview
+                preview.src = URL.createObjectURL(file);
+                preview.style.display = 'block';
+
+                // Esperar imagem carregar
+                await new Promise((resolve) => {
+                    preview.onload = resolve;
+                });
+
+                // Classificar imagem
+                const results = await classificarImagem(preview);
+
                 // Mostrar resultados
-                const resultDiv = document.getElementById('result');
-                resultDiv.innerHTML = results.map(r => 
-                    `<div>${r.class}: ${r.probability.toFixed(2)}%</div>`
-                ).join('');
-            };
+                resultDiv.innerHTML = results
+                    .map(r => `
+                        <div class="result-item">
+                            <strong>${r.class}:</strong> ${r.probability.toFixed(2)}%
+                        </div>
+                    `).join('');
+            } catch (error) {
+                errorEl.textContent = error.message;
+            } finally {
+                loadingEl.style.display = 'none';
+            }
         });
     </script>
 </body>
