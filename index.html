@@ -163,6 +163,18 @@
             color: white;
             font-size: 18px;
             margin: 20px 0;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+
+        .error-message {
+            color: #ff4444;
+            background-color: rgba(255, 68, 68, 0.1);
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            display: none;
         }
     </style>
 </head>
@@ -172,9 +184,10 @@
         <div class="container">
             <h1>Sua Curvatura</h1>
             <p class="instruction">
-                Peça para um adulto tirar uma foto ou escolher uma da galeria que mostre a parte de trás do seu cabelo! 📸✨ aaaaaaaaaaaaaaaaaaaaaaaaaaa
+                Peça para um adulto tirar uma foto ou escolher uma da galeria que mostre a parte de trás do seu cabelo! 📸✨
             </p>
             <div id="loadingIndicator">Carregando modelo...</div>
+            <div id="errorMessage" class="error-message"></div>
             <div class="camera-container">
                 <div class="camera-box">
                     <video id="video" autoplay playsinline></video>
@@ -201,6 +214,7 @@
             <button class="capture-button" onclick="voltarParaCamera(event)">Nova Foto</button>
         </div>
     </div>
+
     <script>
         let video = document.getElementById('video');
         let canvas = document.getElementById('canvas');
@@ -211,19 +225,66 @@
         canvas.width = 224;
         canvas.height = 224;
 
+        // Função para mostrar mensagens de erro
+        function showError(message) {
+            const errorElement = document.getElementById('errorMessage');
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
+            setTimeout(() => {
+                errorElement.style.display = 'none';
+            }, 5000);
+        }
+
         async function loadModel() {
             try {
-                document.getElementById('loadingIndicator').style.display = 'block';
-                console.log('Iniciando carregamento do modelo...');
-                model = await tf.loadGraphModel('https://cristinaleticia.github.io/ToinToin/modelo_web/model.json');
-
-                console.log('Modelo carregado com sucesso!');
-                modelLoaded = true;
-                document.getElementById('loadingIndicator').style.display = 'none';
+                const loadingIndicator = document.getElementById('loadingIndicator');
+                loadingIndicator.style.display = 'block';
+                loadingIndicator.textContent = 'Iniciando carregamento do modelo...';
+                
+                const maxRetries = 3;
+                let retryCount = 0;
+                
+                while (retryCount < maxRetries) {
+                    try {
+                        tf.enableDebugMode();
+                        console.log(`Tentativa ${retryCount + 1} de carregar o modelo...`);
+                        
+                        const modelUrl = 'https://cristinaleticia.github.io/ToinToin/modelo_web/model.json';
+                        console.log('Carregando modelo de:', modelUrl);
+                        
+                        const modelPromise = tf.loadGraphModel(modelUrl);
+                        const timeoutPromise = new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('Tempo limite excedido')), 30000));
+                        
+                        model = await Promise.race([modelPromise, timeoutPromise]);
+                        
+                        if (!model || !model.predict) {
+                            throw new Error('Modelo carregado mas está inválido');
+                        }
+                        
+                        const testTensor = tf.zeros([1, 224, 224, 3]);
+                        const testPrediction = model.predict(testTensor);
+                        testPrediction.dispose();
+                        testTensor.dispose();
+                        
+                        console.log('Modelo carregado e verificado com sucesso!');
+                        modelLoaded = true;
+                        loadingIndicator.style.display = 'none';
+                        break;
+                    } catch (retryError) {
+                        console.error(`Erro na tentativa ${retryCount + 1}:`, retryError);
+                        retryCount++;
+                        if (retryCount === maxRetries) {
+                            throw new Error(`Falha após ${maxRetries} tentativas: ${retryError.message}`);
+                        }
+                        loadingIndicator.textContent = `Tentando novamente... (${retryCount}/${maxRetries})`;
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                    }
+                }
             } catch (error) {
-                console.error('Erro ao carregar o modelo:', error);
-                alert('Erro ao carregar o modelo. Por favor, recarregue a página.');
-                document.getElementById('loadingIndicator').style.display = 'none';
+                console.error('Erro fatal ao carregar o modelo:', error);
+                loadingIndicator.style.display = 'none';
+                showError('Erro ao carregar o modelo. Por favor, verifique sua conexão e recarregue a página.');
             }
         }
 
@@ -239,13 +300,13 @@
                 video.srcObject = stream;
             } catch (err) {
                 console.error('Erro ao acessar a câmera:', err);
-                alert('Não foi possível acessar a câmera. Por favor, verifique as permissões.');
+                showError('Não foi possível acessar a câmera. Por favor, verifique as permissões.');
             }
         }
 
         async function handleFileSelect(event) {
             if (!modelLoaded) {
-                alert('Aguarde o modelo carregar completamente.');
+                showError('Aguarde o modelo carregar completamente.');
                 return;
             }
 
@@ -262,7 +323,7 @@
 
         function capture() {
             if (!modelLoaded) {
-                alert('Aguarde o modelo carregar completamente.');
+                showError('Aguarde o modelo carregar completamente.');
                 return;
             }
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -271,6 +332,10 @@
 
         async function analyze() {
             try {
+                const loadingIndicator = document.getElementById('loadingIndicator');
+                loadingIndicator.textContent = 'Analisando imagem...';
+                loadingIndicator.style.display = 'block';
+
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 const tensor = tf.tidy(() => {
                     return tf.browser.fromPixels(imageData)
@@ -295,10 +360,12 @@
                 document.getElementById('probabilidade').textContent = 
                     `Probabilidade: ${(result[maxIndex] * 100).toFixed(2)}%`;
                 
+                loadingIndicator.style.display = 'none';
                 mostrarResultado();
             } catch (error) {
                 console.error('Erro na análise:', error);
-                alert('Erro ao processar imagem. Por favor, tente novamente.');
+                loadingIndicator.style.display = 'none';
+                showError('Erro ao processar imagem. Por favor, tente novamente.');
             }
         }
 
@@ -310,14 +377,15 @@
             event.preventDefault();
             document.getElementById('resultScreen').style.display = 'none';
             document.getElementById('fileInput').value = '';
+            document.getElementById('errorMessage').style.display = 'none';
             initCamera();
         }
 
-        // Initialize camera and model when page loads
+        // Inicializar câmera e modelo quando a página carregar
         initCamera();
         loadModel();
 
-        // Clean up resources when closing the page
+        // Limpar recursos ao fechar a página
         window.addEventListener('beforeunload', () => {
             if (video.srcObject) {
                 video.srcObject.getTracks().forEach(track => track.stop());
